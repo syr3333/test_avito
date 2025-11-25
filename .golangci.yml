@@ -1,0 +1,78 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  govet:
+    enable-all: true
+    disable:
+      - shadow
+  
+  gocyclo:
+    min-complexity: 15
+  
+  goconst:
+    min-len: 2
+    min-occurrences: 3
+  
+  misspell:
+    locale: US
+  
+  lll:
+    line-length: 140
+  
+  goimports:
+    local-prefixes: avito
+  
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gocyclo
+    - goconst
+    - gofmt
+    - goimports
+    - misspell
+    - lll
+    - unconvert
+    - gocritic
+    - revive
+    - exportloopref
+    - nolintlint
+
+  disable:
+    - structcheck
+    - varcheck
+    - deadcode
+    - ifshort
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+  
+  max-issues-per-linter: 0
+  max-same-issues: 0
