@@ -98,7 +98,7 @@ func setupTestEnvironment(t *testing.T) *TestEnvironment {
 	statsRepo := repository.NewStatisticsRepository(db)
 	txMgr := repository.NewTransactionManager(db)
 
-	teamService := service.NewTeamService(teamRepo, userRepo, txMgr)
+	teamService := service.NewTeamService(teamRepo, userRepo, prRepo, txMgr)
 	userService := service.NewUserService(userRepo)
 	prService := service.NewPullRequestService(prRepo, userRepo, txMgr)
 	statsService := service.NewStatisticsService(statsRepo)

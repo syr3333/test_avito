@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -104,4 +105,116 @@ func TestTeamIntegration_ValidateTeamName(t *testing.T) {
 			assertStatusCode(t, resp, tt.expectStatus)
 		})
 	}
+}
+
+func TestTeamIntegration_MassDeactivate(t *testing.T) {
+	env := setupTestEnvironment(t)
+	defer env.Server.Close()
+
+	// 1. Create Team with Author and 4 potential reviewers
+	teamName := "devops"
+	authorID := "author_devops"
+	users := []string{authorID, "u1", "u2", "u3", "u4"}
+	createTeamWithUsers(t, env.BaseURL(), teamName, users...)
+
+	// 2. Create PR
+	prID := "pr_mass_deactivate"
+	createPR(t, env.BaseURL(), prID, "Infrastructure Update", authorID)
+
+	// 3. Find current reviewers using Repo
+	ctx := context.Background()
+	pr, err := env.PRRepo.Get(ctx, prID)
+	require.NoError(t, err)
+	require.NotEmpty(t, pr.AssignedReviewers, "PR should have reviewers assigned")
+
+	initialReviewers := pr.AssignedReviewers
+	t.Logf("Initial reviewers: %v", initialReviewers)
+
+	// 4. Select reviewers to deactivate (all currently assigned)
+	toDeactivate := initialReviewers
+
+	// 5. Mass deactivate them
+	reqBody := dto.MassDeactivateRequest{
+		TeamName: teamName,
+		UserIDs:  toDeactivate,
+	}
+	resp := doRequest(t, env.BaseURL(), HTTPRequest{
+		Method: http.MethodPost,
+		Path:   "/team/users/deactivate",
+		Body:   reqBody,
+	})
+	assertStatusCode(t, resp, http.StatusOK)
+
+	// 6. Verify Users are deactivated
+	for _, uid := range toDeactivate {
+		u, err := env.UserRepo.Get(ctx, uid)
+		require.NoError(t, err)
+		assert.False(t, u.IsActive, "User %s should be inactive", uid)
+	}
+
+	// 7. Verify PR reviewers are updated
+	prUpdated, err := env.PRRepo.Get(ctx, prID)
+	require.NoError(t, err)
+
+	newReviewers := prUpdated.AssignedReviewers
+	t.Logf("New reviewers: %v", newReviewers)
+
+	// Assertions
+	for _, r := range newReviewers {
+		// New reviewers must NOT be in the deactivated list
+		assert.NotContains(t, toDeactivate, r, "Deactivated user %s should not be a reviewer", r)
+		// Should verify they are from u1..u4
+		assert.Contains(t, users, r)
+		assert.NotEqual(t, authorID, r)
+	}
+
+	// Since we had 4 eligible reviewers (u1-u4) and deactivated 2 (assuming standard 2 assigned),
+	// there should be 2 active candidates left (u3, u4).
+	// The logic should have replaced them.
+	assert.Len(t, newReviewers, len(initialReviewers), "Should preserve number of reviewers if candidates exist")
+
+	// Verify uniqueness
+	unique := make(map[string]bool)
+	for _, r := range newReviewers {
+		unique[r] = true
+	}
+	assert.Equal(t, len(newReviewers), len(unique), "Reviewers should be unique")
+}
+
+func TestTeamIntegration_MassDeactivate_NoReplacement(t *testing.T) {
+	env := setupTestEnvironment(t)
+	defer env.Server.Close()
+
+	// 1. Create Team with Author and 1 reviewer
+	teamName := "small_team"
+	authorID := "author_small"
+	reviewerID := "only_reviewer"
+	createTeamWithUsers(t, env.BaseURL(), teamName, authorID, reviewerID)
+
+	// 2. Create PR
+	prID := "pr_no_replacement"
+	createPR(t, env.BaseURL(), prID, "Small Update", authorID)
+
+	// 3. Check assignment
+	ctx := context.Background()
+	pr, err := env.PRRepo.Get(ctx, prID)
+	require.NoError(t, err)
+	require.Contains(t, pr.AssignedReviewers, reviewerID)
+
+	// 4. Deactivate the only reviewer
+	reqBody := dto.MassDeactivateRequest{
+		TeamName: teamName,
+		UserIDs:  []string{reviewerID},
+	}
+	resp := doRequest(t, env.BaseURL(), HTTPRequest{
+		Method: http.MethodPost,
+		Path:   "/team/users/deactivate",
+		Body:   reqBody,
+	})
+	assertStatusCode(t, resp, http.StatusOK)
+
+	// 5. Verify PR has no reviewers (assignment removed)
+	prUpdated, err := env.PRRepo.Get(ctx, prID)
+	require.NoError(t, err)
+	assert.Empty(t, prUpdated.AssignedReviewers, "Should remove assignment if no candidates available")
 }

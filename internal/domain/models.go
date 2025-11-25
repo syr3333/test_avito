@@ -51,6 +51,18 @@ type Statistics struct {
 	Teams             int
 }
 
+type ReviewAssignment struct {
+	PullRequestID string
+	ReviewerID    string
+	AuthorID      string
+}
+
+type ReviewReplacement struct {
+	PullRequestID string
+	OldUserID     string
+	NewUserID     string
+}
+
 type AppError struct {
 	Code    string
 	Message string

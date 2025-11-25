@@ -3,10 +3,13 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"avito/internal/domain"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
 )
 
 type prRepo struct {
@@ -244,4 +247,124 @@ func (r *prRepo) GetReviewers(ctx context.Context, prID string) ([]string, error
 	}
 
 	return reviewers, rows.Err()
+}
+
+func (r *prRepo) GetOpenAssignmentsByReviewers(ctx context.Context, tx *sql.Tx, reviewerIDs []string) ([]domain.ReviewAssignment, error) {
+	query := `
+		SELECT prr.pull_request_id, prr.user_id, pr.author_id
+		FROM pr_reviewers prr
+		JOIN pull_requests pr ON prr.pull_request_id = pr.id
+		WHERE prr.user_id = ANY($1) AND pr.status = 'OPEN'
+	`
+
+	var rows *sql.Rows
+	var err error
+
+	if tx != nil {
+		rows, err = tx.QueryContext(ctx, query, pq.Array(reviewerIDs))
+	} else {
+		rows, err = r.db.QueryContext(ctx, query, pq.Array(reviewerIDs))
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	assignments := []domain.ReviewAssignment{}
+	for rows.Next() {
+		var a domain.ReviewAssignment
+		if err := rows.Scan(&a.PullRequestID, &a.ReviewerID, &a.AuthorID); err != nil {
+			return nil, err
+		}
+		assignments = append(assignments, a)
+	}
+	return assignments, rows.Err()
+}
+
+func (r *prRepo) ReplaceReviewersBulk(ctx context.Context, tx *sql.Tx, replacements []domain.ReviewReplacement) error {
+	if len(replacements) == 0 {
+		return nil
+	}
+
+	valueStrings := make([]string, 0, len(replacements))
+	valueArgs := make([]interface{}, 0, len(replacements)*3)
+
+	for i, rep := range replacements {
+		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", i*3+1, i*3+2, i*3+3))
+		valueArgs = append(valueArgs, rep.PullRequestID, rep.OldUserID, rep.NewUserID)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE pr_reviewers AS t 
+		SET user_id = v.new_user_id 
+		FROM (VALUES %s) AS v(pr_id, old_user_id, new_user_id) 
+		WHERE t.pull_request_id = v.pr_id AND t.user_id = v.old_user_id
+	`, strings.Join(valueStrings, ","))
+
+	if tx != nil {
+		_, err := tx.ExecContext(ctx, query, valueArgs...)
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, query, valueArgs...)
+	return err
+}
+
+func (r *prRepo) GetReviewersByPRs(ctx context.Context, tx *sql.Tx, prIDs []string) (map[string][]string, error) {
+	if len(prIDs) == 0 {
+		return map[string][]string{}, nil
+	}
+
+	query := `SELECT pull_request_id, user_id FROM pr_reviewers WHERE pull_request_id = ANY($1)`
+
+	var rows *sql.Rows
+	var err error
+
+	if tx != nil {
+		rows, err = tx.QueryContext(ctx, query, pq.Array(prIDs))
+	} else {
+		rows, err = r.db.QueryContext(ctx, query, pq.Array(prIDs))
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]string)
+	for rows.Next() {
+		var prID, userID string
+		if err := rows.Scan(&prID, &userID); err != nil {
+			return nil, err
+		}
+		result[prID] = append(result[prID], userID)
+	}
+	return result, rows.Err()
+}
+
+func (r *prRepo) RemoveReviewersBulk(ctx context.Context, tx *sql.Tx, assignments []domain.ReviewAssignment) error {
+	if len(assignments) == 0 {
+		return nil
+	}
+
+	valueStrings := make([]string, 0, len(assignments))
+	valueArgs := make([]interface{}, 0, len(assignments)*2)
+
+	for i, a := range assignments {
+		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2))
+		valueArgs = append(valueArgs, a.PullRequestID, a.ReviewerID)
+	}
+
+	query := fmt.Sprintf(`
+		DELETE FROM pr_reviewers AS t 
+		USING (VALUES %s) AS v(pr_id, user_id) 
+		WHERE t.pull_request_id = v.pr_id AND t.user_id = v.user_id
+	`, strings.Join(valueStrings, ","))
+
+	if tx != nil {
+		_, err := tx.ExecContext(ctx, query, valueArgs...)
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, query, valueArgs...)
+	return err
 }

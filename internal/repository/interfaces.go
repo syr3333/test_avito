@@ -21,6 +21,8 @@ type UserRepository interface {
 	GetActiveTeammates(ctx context.Context, authorID string, limit int) ([]domain.User, error)
 	FindReplacementReviewer(ctx context.Context, tx *sql.Tx, teamName string, excludeIDs []string) (*domain.User, error)
 	SetActive(ctx context.Context, userID string, isActive bool) error
+	DeactivateMany(ctx context.Context, tx *sql.Tx, userIDs []string) error
+	GetActiveUsersByTeam(ctx context.Context, tx *sql.Tx, teamName string) ([]domain.User, error)
 }
 
 type PullRequestRepository interface {
@@ -33,6 +35,10 @@ type PullRequestRepository interface {
 	AddReviewer(ctx context.Context, tx *sql.Tx, prID, userID string) error
 	RemoveReviewer(ctx context.Context, tx *sql.Tx, prID, userID string) error
 	GetReviewers(ctx context.Context, prID string) ([]string, error)
+	GetOpenAssignmentsByReviewers(ctx context.Context, tx *sql.Tx, reviewerIDs []string) ([]domain.ReviewAssignment, error)
+	ReplaceReviewersBulk(ctx context.Context, tx *sql.Tx, replacements []domain.ReviewReplacement) error
+	GetReviewersByPRs(ctx context.Context, tx *sql.Tx, prIDs []string) (map[string][]string, error)
+	RemoveReviewersBulk(ctx context.Context, tx *sql.Tx, assignments []domain.ReviewAssignment) error
 }
 
 type TransactionManager interface {

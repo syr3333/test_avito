@@ -75,6 +75,14 @@ func (m *mockUserRepo) SetActive(ctx context.Context, userID string, isActive bo
 	return nil
 }
 
+func (m *mockUserRepo) DeactivateMany(ctx context.Context, tx *sql.Tx, userIDs []string) error {
+	return nil
+}
+
+func (m *mockUserRepo) GetActiveUsersByTeam(ctx context.Context, tx *sql.Tx, teamName string) ([]domain.User, error) {
+	return nil, nil
+}
+
 type mockTxManager struct {
 	beginFn func(ctx context.Context) (*sql.Tx, error)
 }
@@ -87,6 +95,46 @@ func (m *mockTxManager) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return &sql.Tx{}, nil
 }
 
+type mockPRRepo struct{}
+
+func (m *mockPRRepo) Create(ctx context.Context, tx *sql.Tx, pr *domain.PullRequest) error {
+	return nil
+}
+func (m *mockPRRepo) Get(ctx context.Context, prID string) (*domain.PullRequest, error) {
+	return nil, nil
+}
+func (m *mockPRRepo) GetForUpdate(ctx context.Context, tx *sql.Tx, prID string) (*domain.PullRequest, error) {
+	return nil, nil
+}
+func (m *mockPRRepo) Update(ctx context.Context, tx *sql.Tx, pr *domain.PullRequest) error {
+	return nil
+}
+func (m *mockPRRepo) Exists(ctx context.Context, prID string) (bool, error) { return false, nil }
+func (m *mockPRRepo) GetByReviewer(ctx context.Context, userID string) ([]domain.PullRequestShort, error) {
+	return nil, nil
+}
+func (m *mockPRRepo) AddReviewer(ctx context.Context, tx *sql.Tx, prID, userID string) error {
+	return nil
+}
+func (m *mockPRRepo) RemoveReviewer(ctx context.Context, tx *sql.Tx, prID, userID string) error {
+	return nil
+}
+func (m *mockPRRepo) GetReviewers(ctx context.Context, prID string) ([]string, error) {
+	return nil, nil
+}
+func (m *mockPRRepo) GetOpenAssignmentsByReviewers(ctx context.Context, tx *sql.Tx, reviewerIDs []string) ([]domain.ReviewAssignment, error) {
+	return nil, nil
+}
+func (m *mockPRRepo) ReplaceReviewersBulk(ctx context.Context, tx *sql.Tx, replacements []domain.ReviewReplacement) error {
+	return nil
+}
+func (m *mockPRRepo) GetReviewersByPRs(ctx context.Context, tx *sql.Tx, prIDs []string) (map[string][]string, error) {
+	return nil, nil
+}
+func (m *mockPRRepo) RemoveReviewersBulk(ctx context.Context, tx *sql.Tx, assignments []domain.ReviewAssignment) error {
+	return nil
+}
+
 func TestTeamService_CreateTeam(t *testing.T) {
 	ctx := context.Background()
 
@@ -97,9 +145,10 @@ func TestTeamService_CreateTeam(t *testing.T) {
 			},
 		}
 		userRepo := &mockUserRepo{}
+		prRepo := &mockPRRepo{}
 		txMgr := &mockTxManager{}
 
-		service := NewTeamService(teamRepo, userRepo, txMgr)
+		service := NewTeamService(teamRepo, userRepo, prRepo, txMgr)
 
 		team := &domain.Team{
 			Name: "backend",
@@ -128,9 +177,10 @@ func TestTeamService_CreateTeam(t *testing.T) {
 			},
 		}
 		userRepo := &mockUserRepo{}
+		prRepo := &mockPRRepo{}
 		txMgr := &mockTxManager{}
 
-		service := NewTeamService(teamRepo, userRepo, txMgr)
+		service := NewTeamService(teamRepo, userRepo, prRepo, txMgr)
 
 		team := &domain.Team{
 			Name: "backend",
@@ -164,9 +214,10 @@ func TestTeamService_GetTeam(t *testing.T) {
 			},
 		}
 		userRepo := &mockUserRepo{}
+		prRepo := &mockPRRepo{}
 		txMgr := &mockTxManager{}
 
-		service := NewTeamService(teamRepo, userRepo, txMgr)
+		service := NewTeamService(teamRepo, userRepo, prRepo, txMgr)
 		team, err := service.GetTeam(ctx, "backend")
 
 		if err != nil {
@@ -184,9 +235,10 @@ func TestTeamService_GetTeam(t *testing.T) {
 			},
 		}
 		userRepo := &mockUserRepo{}
+		prRepo := &mockPRRepo{}
 		txMgr := &mockTxManager{}
 
-		service := NewTeamService(teamRepo, userRepo, txMgr)
+		service := NewTeamService(teamRepo, userRepo, prRepo, txMgr)
 		_, err := service.GetTeam(ctx, "nonexistent")
 
 		if err == nil {

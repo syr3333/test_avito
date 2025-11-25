@@ -201,3 +201,57 @@ func (r *userRepo) SetActive(ctx context.Context, userID string, isActive bool) 
 
 	return nil
 }
+
+func (r *userRepo) DeactivateMany(ctx context.Context, tx *sql.Tx, userIDs []string) error {
+	query, args, err := r.builder.
+		Update("users").
+		Set("is_active", false).
+		Where(sq.Eq{"id": userIDs}).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	if tx != nil {
+		_, err = tx.ExecContext(ctx, query, args...)
+	} else {
+		_, err = r.db.ExecContext(ctx, query, args...)
+	}
+
+	return err
+}
+
+func (r *userRepo) GetActiveUsersByTeam(ctx context.Context, tx *sql.Tx, teamName string) ([]domain.User, error) {
+	query, args, err := r.builder.
+		Select("id", "username", "team_name", "is_active").
+		From("users").
+		Where(sq.Eq{"team_name": teamName, "is_active": true}).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	var rows *sql.Rows
+
+	if tx != nil {
+		rows, err = tx.QueryContext(ctx, query, args...)
+	} else {
+		rows, err = r.db.QueryContext(ctx, query, args...)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]domain.User, 0)
+	for rows.Next() {
+		var u domain.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.TeamName, &u.IsActive); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+
+	return users, rows.Err()
+}

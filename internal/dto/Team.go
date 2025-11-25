@@ -37,6 +37,28 @@ type TeamMember struct {
 	IsActive bool   `json:"is_active"`
 }
 
+// MassDeactivateRequest - запрос на массовую деактивацию
+type MassDeactivateRequest struct {
+	TeamName string   `json:"team_name"`
+	UserIDs  []string `json:"user_ids"`
+}
+
+// Validate проверяет корректность запроса
+func (r *MassDeactivateRequest) Validate() error {
+	if err := ValidateTeamName(r.TeamName); err != nil {
+		return err
+	}
+	if len(r.UserIDs) == 0 {
+		return domain.NewAppError(domain.ErrCodeInvalidInput, "user_ids cannot be empty")
+	}
+	for i, uid := range r.UserIDs {
+		if err := ValidateUserID(uid); err != nil {
+			return domain.NewAppError(domain.ErrCodeInvalidInput, fmt.Sprintf("user_ids[%d]: %s", i, err.Error()))
+		}
+	}
+	return nil
+}
+
 // ToDomain преобразует DTO в domain модель
 func (r *TeamRequest) ToDomain() *domain.Team {
 	members := make([]domain.TeamMember, len(r.Members))

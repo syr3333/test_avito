@@ -78,3 +78,24 @@ func (h *TeamHandler) GetTeam(w http.ResponseWriter, r *http.Request) {
 	response := dto.TeamFromDomain(team)
 	WriteJSON(w, http.StatusOK, response)
 }
+
+// MassDeactivateUsers handles POST /team/users/deactivate
+func (h *TeamHandler) MassDeactivateUsers(w http.ResponseWriter, r *http.Request) {
+	var req dto.MassDeactivateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, domain.ErrCodeInvalidRequest, "invalid request body")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		WriteAppError(w, err)
+		return
+	}
+
+	if err := h.teamService.MassDeactivateUsers(r.Context(), req.TeamName, req.UserIDs); err != nil {
+		WriteAppError(w, err)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}

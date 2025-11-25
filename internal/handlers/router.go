@@ -29,6 +29,7 @@ func Router(
 
 	r.Post("/team/add", teamHandler.AddTeam)
 	r.Get("/team/get", teamHandler.GetTeam)
+	r.Post("/team/users/deactivate", teamHandler.MassDeactivateUsers)
 
 	r.Post("/users/setIsActive", userHandler.SetIsActive)
 	r.Get("/users/getReview", userHandler.GetReview)
